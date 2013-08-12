@@ -11,4 +11,9 @@ Added new headers 'cache_control' and 'expires' in the code. They can be used us
 e.g. 
 * -oexpiry_days=100
 * -oexpiry_years=5
-* -ocache_control=324000 <-- this is max-age in seconds 
+* -ocache_control=324000 <-- this is max-age in seconds
+
+Usage
+=============
+
+s3fs -o allow_other -oexpiry_years=5 -ocache_control=8440000 -odefault_acl=public-read <bucket_name> <mount-point>
