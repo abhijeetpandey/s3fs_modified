@@ -1717,11 +1717,26 @@ string lookupMimeType(string s) {
   return result;
 }
 
+//function which sets time in format DAY, DD MMM YYYY HH:MM:SS TMZ
+static void timeset(char *buffer, size_t size)
+{
+  int time_seconds = (expiry_years*365 + expiry_days)*24*60*60;
+  time_t rawtime;
+  struct tm * timeinfo;
+  rawtime = time(0)+time_seconds;
+  timeinfo = localtime (&rawtime);
+  strftime (buffer,30,"%a, %d %b %G %T %Z\0",timeinfo);
+}
+
 // common function for creation of a plain object
 static int create_file_object(const char *path, mode_t mode) {
   int result;
   char *s3_realpath;
   CURL *curl = NULL;
+  char buffer[30];
+  char cache_control_buffer[30];
+  timeset(buffer,sizeof(buffer));
+  sprintf(cache_control_buffer, "%d", cache_control);
 
   if(foreground) 
     cout << "   create_file_object[path=" << path << "][mode=" << mode << "]" << endl;
@@ -1738,10 +1753,13 @@ static int create_file_object(const char *path, mode_t mode) {
   headers.append("Content-Type: " + contentType);
   // x-amz headers: (a) alphabetical order and (b) no spaces after colon
   headers.append("x-amz-acl:" + default_acl);
+  headers.append("x-amz-meta-cache-control:max-age="+ str(cache_control_buffer));
+  headers.append("x-amz-meta-expires:" + str(buffer));
   headers.append("x-amz-meta-gid:" + str(getgid()));
   headers.append("x-amz-meta-mode:" + str(mode));
   headers.append("x-amz-meta-mtime:" + str(time(NULL)));
   headers.append("x-amz-meta-uid:" + str(getuid()));
+
   if(public_bucket.substr(0,1) != "1")
     headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
       calc_signature("PUT", contentType, date, headers.get(), resource));
@@ -1811,6 +1829,10 @@ static int s3fs_mkdir(const char *path, mode_t mode) {
   string resource;
   string date = get_date();
   auto_curl_slist headers;
+  char buffer[30];
+  char cache_control_buffer[30];
+  timeset(buffer,sizeof(buffer));
+  sprintf(cache_control_buffer, "%d", cache_control);
 
   if(foreground) 
     cout << "mkdir[path=" << path << "][mode=" << mode << "]" << endl;
@@ -1827,6 +1849,8 @@ static int s3fs_mkdir(const char *path, mode_t mode) {
   headers.append("Content-Type: application/x-directory");
   // x-amz headers: (a) alphabetical order and (b) no spaces after colon
   headers.append("x-amz-acl:" + default_acl);
+  headers.append("x-amz-meta-cache-control:max-age="+ str(cache_control_buffer));
+  headers.append("x-amz-meta-expires:" + str(buffer));
   headers.append("x-amz-meta-gid:" + str(getgid()));
   headers.append("x-amz-meta-mode:" + str(mode));
   headers.append("x-amz-meta-mtime:" + str(time(NULL)));
@@ -4206,6 +4230,19 @@ static int my_fuse_opt_proc(void *data, const char *arg, int key, struct fuse_ar
   }
 
   if (key == FUSE_OPT_KEY_OPT) {
+
+    if (strstr(arg, "cache_control=") != 0) {
+      cache_control = atoi(strchr(arg, '=') + 1);
+      return 0;
+    }
+    if (strstr(arg, "expiry_days=") != 0) {
+      expiry_days = atoi(strchr(arg, '=') + 1);
+      return 0;
+    }
+    if (strstr(arg, "expiry_years=") != 0) {
+      expiry_years = atoi(strchr(arg, '=') + 1);
+      return 0;
+    }
     if (strstr(arg, "default_acl=") != 0) {
       default_acl = strchr(arg, '=') + 1;
       return 0;

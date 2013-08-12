@@ -30,6 +30,9 @@ long connect_timeout = 10;
 time_t readwrite_timeout = 30;
 
 int retries = 2;
+static int expiry_days = 0;
+static int expiry_years = 0;
+static int cache_control = 0;
 
 bool debug = 0;
 bool foreground = 0;
