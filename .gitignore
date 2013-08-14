@@ -1,1 +1,4 @@
 .DS_Store
+*.idea
+*.iml
+s3fs-1.61/Users/
