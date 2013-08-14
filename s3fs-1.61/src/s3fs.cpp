@@ -604,6 +604,18 @@ int get_local_fd(const char* path) {
   return fd;
 }
 
+
+//function which sets time in format DAY, DD MMM YYYY HH:MM:SS TMZ
+static void timeset(char *buffer, size_t size)
+{
+  int time_seconds = (expiry_years*365 + expiry_days)*24*60*60;
+  time_t rawtime;
+  struct tm * timeinfo;
+  rawtime = time(0)+time_seconds;
+  timeinfo = localtime (&rawtime);
+  strftime (buffer,30,"%a, %d %b %G %T %Z\0",timeinfo);
+}
+
 /**
  * create or update s3 meta
  * @return fuse return code
@@ -616,6 +628,10 @@ static int put_headers(const char *path, headers_t meta) {
   struct stat buf;
   struct BodyStruct body;
   CURL *curl = NULL;
+  char buffer[30];
+  char cache_control_buffer[30];
+  timeset(buffer,sizeof(buffer));
+  sprintf(cache_control_buffer, "%d", cache_control);
 
   if(foreground) 
     cout << "   put_headers[path=" << path << "]" << endl;
@@ -635,6 +651,8 @@ static int put_headers(const char *path, headers_t meta) {
   auto_curl_slist headers;
   string date = get_date();
   headers.append("Date: " + date);
+  headers.append("Cache-Control:max-age="+ str(cache_control_buffer));
+  headers.append("Expires:" + str(buffer));
 
   meta["x-amz-acl"] = default_acl;
   string ContentType = meta["Content-Type"];
@@ -1717,28 +1735,13 @@ string lookupMimeType(string s) {
   return result;
 }
 
-//function which sets time in format DAY, DD MMM YYYY HH:MM:SS TMZ
-static void timeset(char *buffer, size_t size)
-{
-  int time_seconds = (expiry_years*365 + expiry_days)*24*60*60;
-  time_t rawtime;
-  struct tm * timeinfo;
-  rawtime = time(0)+time_seconds;
-  timeinfo = localtime (&rawtime);
-  strftime (buffer,30,"%a, %d %b %G %T %Z\0",timeinfo);
-}
-
 // common function for creation of a plain object
 static int create_file_object(const char *path, mode_t mode) {
   int result;
   char *s3_realpath;
   CURL *curl = NULL;
-  char buffer[30];
-  char cache_control_buffer[30];
-  timeset(buffer,sizeof(buffer));
-  sprintf(cache_control_buffer, "%d", cache_control);
 
-  if(foreground) 
+  if(foreground)
     cout << "   create_file_object[path=" << path << "][mode=" << mode << "]" << endl;
 
   s3_realpath = get_realpath(path);
@@ -1752,9 +1755,6 @@ static int create_file_object(const char *path, mode_t mode) {
   string contentType(lookupMimeType(path));
   headers.append("Content-Type: " + contentType);
   // x-amz headers: (a) alphabetical order and (b) no spaces after colon
-  headers.append("x-amz-acl:" + default_acl);
-  headers.append("x-amz-meta-cache-control:max-age="+ str(cache_control_buffer));
-  headers.append("x-amz-meta-expires:" + str(buffer));
   headers.append("x-amz-meta-gid:" + str(getgid()));
   headers.append("x-amz-meta-mode:" + str(mode));
   headers.append("x-amz-meta-mtime:" + str(time(NULL)));
@@ -1829,10 +1829,6 @@ static int s3fs_mkdir(const char *path, mode_t mode) {
   string resource;
   string date = get_date();
   auto_curl_slist headers;
-  char buffer[30];
-  char cache_control_buffer[30];
-  timeset(buffer,sizeof(buffer));
-  sprintf(cache_control_buffer, "%d", cache_control);
 
   if(foreground) 
     cout << "mkdir[path=" << path << "][mode=" << mode << "]" << endl;
@@ -1849,8 +1845,6 @@ static int s3fs_mkdir(const char *path, mode_t mode) {
   headers.append("Content-Type: application/x-directory");
   // x-amz headers: (a) alphabetical order and (b) no spaces after colon
   headers.append("x-amz-acl:" + default_acl);
-  headers.append("x-amz-meta-cache-control:max-age="+ str(cache_control_buffer));
-  headers.append("x-amz-meta-expires:" + str(buffer));
   headers.append("x-amz-meta-gid:" + str(getgid()));
   headers.append("x-amz-meta-mode:" + str(mode));
   headers.append("x-amz-meta-mtime:" + str(time(NULL)));
